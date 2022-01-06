@@ -1,7 +1,9 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <filesystem>
 #include <set>
+#include <map>
 
 #include <zip.h>
 
@@ -55,30 +57,8 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    // Search for the file of given name
-    const char *name = "file.txt";
-    struct zip_stat st;
-    zip_stat_init(&st);
-    int index = zip_stat(z, name, 0, &st);
-    if (index != -1) {
-        // Alloc memory for its uncompressed contents
-        // it's a text file so we should add the \0 manually...
-        char *contents = new char[st.size + 1];
-        contents[st.size] = '\0';
-
-        // Read the compressed file
-        zip_file *f = zip_fopen(z, "file.txt", 0);
-        zip_fread(f, contents, st.size);
-
-        puts("=== start ===");
-        printf("%s", contents);
-        puts("===  end  ===");
-
-        zip_fclose(f);
-    }
-
     // get all dirs at archive root with %SAMPLE% as name
-    zip_int64_t num_entries = zip_get_num_entries(z, 0);
+    const zip_int64_t num_entries = zip_get_num_entries(z, 0);
     std::set<std::string> paths;
     for (zip_uint64_t i = 0; i < (zip_uint64_t)num_entries; i++) {
         const char *name = zip_get_name(z, i, 0);
@@ -91,17 +71,75 @@ int main(int argc, char* argv[])
             paths.insert(dirName);
         }
     }
+
+    // Check if all environment variable paths actually exists
+    bool checkingPassed = true;
+    std::map<std::string, std::string> env_var_map;
     for (std::string singlePath : paths) {
         std::string env_val = getEnv(singlePath);
-        std::cout << "> " << singlePath << env_val << std::endl;
+        bool ok = true;
+        std::string state;
         if (env_val.empty()) {
-            std::cout << "> !! empty" << std::endl;
+            ok = false;
+            state = "(empty)";
         } else {
             bool exist = std::filesystem::exists(env_val);
-            std::cout << "> " << (exist ? "exist" : "NOT exist") << std::endl;
+            if (!exist) {
+                state = "(not existed)";
+                ok = false;
+            }
+        }
+
+        if (ok) {
+            env_var_map.insert_or_assign(singlePath, env_val);
+        } else {
+            checkingPassed = false;
+        }
+        std::cout << (ok ? "[OK] " : "[ERROR] ") << singlePath << " : " << env_val << " " << state << std::endl;
+    }
+
+    if (!checkingPassed) {
+        std::cout << "Check failed!" << std::endl;
+        return -1;
+    }
+
+    // Extract files
+    for (zip_uint64_t i = 0; i < (zip_uint64_t)num_entries; i++) {
+        const char *name = zip_get_name(z, i, 0);
+
+        std::string path(name);
+        bool isDir = path.at(path.length() - 1) == '/';
+        std::string dirName(getBaseDirName(name));
+        if (env_var_map.count(dirName) != 0) { // C++20: should use contains()
+            path.replace(0, dirName.length(), env_var_map.at(dirName));
+            std::filesystem::path filepath(path);
+            filepath.make_preferred();
+            if (isDir) {
+                std::filesystem::create_directories(filepath);
+            } else {
+                // somewhere says zip archive file list could be unordered,
+                // so maybe we still need to ensure the base dir is created?
+                // TODO: ^^^
+                struct zip_stat st;
+                zip_stat_init(&st);
+                int index = zip_stat_index(z, i, 0, &st);
+                char *contents = new char[st.size];
+
+                // Read the compressed file
+                zip_file *f = zip_fopen(z, "file.txt", 0);
+                zip_fread(f, contents, st.size);
+
+                std::ofstream ostrm(filepath, std::ios::binary);
+                ostrm.write(contents, st.size);
+                ostrm.flush();
+                ostrm.close();
+
+                zip_fclose(f);
+            }
+            std::cout << "[Extracted] " << filepath << std::endl;
         }
     }
 
-    //And close the archive
+    // And close the archive
     zip_close(z);
 }
