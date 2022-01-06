@@ -24,5 +24,5 @@ PRIVATE
 )
 target_link_libraries(${EXE_NAME}
 PRIVATE
-    ${libzip_LINK_LIBRARIES}
+    ${libzip_LIBRARIES}
 )
