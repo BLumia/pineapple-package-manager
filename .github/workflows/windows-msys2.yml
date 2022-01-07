@@ -1,0 +1,39 @@
+name: Windows MSYS2 Build
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain mingw-w64-x86_64-ninja mingw-w64-x86_64-meson tree
+            mingw-w64-x86_64-libzip
+      - name: Build ppkg
+        run: |
+          mkdir build && cd build
+          meson ../
+          meson compile
+          tree
+          cd ..
+      - name: Prepare for package
+        continue-on-error: true
+        run: |
+          mkdir package_workspace && cd package_workspace
+          cp ../build/ppkg.exe ./
+          strip -S ./ppkg.exe
+          # done
+          cd ../
+      - uses: actions/upload-artifact@v2
+        with:
+          name: msys2-mingw-w64-x86_64-windows
+          path: package_workspace/*
