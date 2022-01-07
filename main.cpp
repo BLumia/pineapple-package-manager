@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
                 char *contents = new char[st.size];
 
                 // Read the compressed file
-                zip_file *f = zip_fopen(z, "file.txt", 0);
+                zip_file *f = zip_fopen_index(z, i, 0);
                 zip_fread(f, contents, st.size);
 
                 std::ofstream ostrm(filepath, std::ios::binary);
@@ -142,4 +142,6 @@ int main(int argc, char* argv[])
 
     // And close the archive
     zip_close(z);
+
+    return 0;
 }
