@@ -27,9 +27,8 @@ std::string_view getBaseDirName(std::string_view path) {
 }
 
 // get the base dir name of a given path, and also return if it's name is an environment variable name
-// the given path MUST be a folder path (ends with '/')
 std::pair<bool, std::string> getEnvBaseDirName(std::string_view path) {
-    if (path.length() <= 2 || path.at(path.length() - 1) != '/') return std::make_pair(false, std::string());
+    if (path.length() <= 2) return std::make_pair(false, std::string());
 
     std::string_view dirname = getBaseDirName(path);
 
@@ -117,9 +116,12 @@ int main(int argc, char* argv[])
             if (isDir) {
                 std::filesystem::create_directories(filepath);
             } else {
-                // somewhere says zip archive file list could be unordered,
-                // so maybe we still need to ensure the base dir is created?
-                // TODO: ^^^
+                // zip archive file list could be unordered,
+                // and it may even don't have a directly related directory item.
+                // e.g. /something/file.txt may exist but there is no /something/
+                // so we still need to ensure the base dir is created
+                std::filesystem::path path{filepath};
+                std::filesystem::create_directories(path.parent_path());
                 struct zip_stat st;
                 zip_stat_init(&st);
                 int index = zip_stat_index(z, i, 0, &st);
