@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
         } else {
             checkingPassed = false;
         }
-        std::cout << (ok ? "[OK] " : "[ERROR] ") << singlePath << " : " << env_val << " " << state << std::endl;
+        std::cout << (ok ? "[OK] " : "[NG] ") << singlePath << " : " << env_val << " " << state << std::endl;
     }
 
     if (!checkingPassed) {
@@ -125,20 +125,20 @@ int main(int argc, char* argv[])
                 struct zip_stat st;
                 zip_stat_init(&st);
                 int index = zip_stat_index(z, i, 0, &st);
-                char *contents = new char[st.size];
+                std::unique_ptr<char[]> contents(new char[st.size]);
 
                 // Read the compressed file
                 zip_file *f = zip_fopen_index(z, i, 0);
-                zip_fread(f, contents, st.size);
+                zip_fread(f, contents.get(), st.size);
 
                 std::ofstream ostrm(filepath, std::ios::binary);
-                ostrm.write(contents, st.size);
+                ostrm.write(contents.get(), st.size);
                 ostrm.flush();
                 ostrm.close();
 
                 zip_fclose(f);
             }
-            std::cout << "[Extracted] " << filepath << std::endl;
+            std::cout << "[Extracted] " << filepath.u8string() << std::endl;
         }
     }
 
